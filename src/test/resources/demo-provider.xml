@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dubbo="http://code.alibabatech.com/schema/dubbo"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-2.5.xsd
+	http://code.alibabatech.com/schema/dubbo http://code.alibabatech.com/schema/dubbo/dubbo.xsd">
+
+	<bean
+		class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+		<property name="systemPropertiesModeName" value="SYSTEM_PROPERTIES_MODE_OVERRIDE" />
+		<property name="location" value="classpath:dubbo.properties" />
+	</bean>
+
+	<dubbo:application name="sodao-provider-01" owner="provider-01"/>
+	
+	<dubbo:registry address="zookeeper://127.0.0.1:2181?proxy=thrift"/>
+	
+	    <!-- 用registry协议配置监视器 -->
+    <!-- <dubbo:monitor protocol="registry" /> -->
+    
+	<dubbo:protocol id="thrift_1" name="thrift" server="netty2" client="netty2" 
+	threads="100" port="8060" payload="8192"/>
+		
+	<bean id="userService" class="com.sodao.dubbo.t4.impl.UserServiceImpl" />
+	<dubbo:service interface="com.sodao.dubbo.t4.t1.UserService$Iface"
+		ref="userService" protocol="thrift_1">
+	</dubbo:service>
+
+	<dubbo:protocol id="thrift_2" name="thrift" server="netty2" client="netty2"  
+	threads="100" port="8070" payload="8192"/>
+	<bean id="userService2" class="com.sodao.dubbo.t4.impl.UserServiceImpl2" />
+	<dubbo:service interface="com.sodao.dubbo.t4.t2.UserService2$Iface"
+		ref="userService2" protocol="thrift_2">
+	</dubbo:service>
+</beans>

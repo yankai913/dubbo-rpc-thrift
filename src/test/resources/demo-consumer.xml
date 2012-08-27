@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dubbo="http://code.alibabatech.com/schema/dubbo"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-2.5.xsd
+	http://code.alibabatech.com/schema/dubbo http://code.alibabatech.com/schema/dubbo/dubbo.xsd">
+
+	<bean
+		class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+		<property name="systemPropertiesModeName" value="SYSTEM_PROPERTIES_MODE_OVERRIDE" />
+		<property name="location" value="classpath:dubbo.properties" />
+	</bean>
+
+	<dubbo:application name="sodao-consumer-01" owner="consumer-01"/>
+	
+	<dubbo:registry address="zookeeper://127.0.0.1:2181?proxy=thrift"/>
+	
+	<!-- <dubbo:protocol name="thrift" threads="100" /> -->
+	
+	<dubbo:reference interface="com.sodao.dubbo.t4.t1.UserService$Iface"
+		id="userService">
+	</dubbo:reference>
+
+	<dubbo:reference interface="com.sodao.dubbo.t4.t2.UserService2$Iface"
+		id="userService2" >
+	</dubbo:reference>
+	
+</beans>

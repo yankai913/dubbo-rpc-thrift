@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:dubbo="http://code.alibabatech.com/schema/dubbo"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-2.5.xsd
+	http://code.alibabatech.com/schema/dubbo http://code.alibabatech.com/schema/dubbo/dubbo.xsd">
+
+	<dubbo:application name="kaige" owner="kaige"/>
+	
+	<dubbo:registry address="zookeeper://localhost:2181?proxy=thrift2"/>
+	
+	    <!-- 用registry协议配置监视器 -->
+<!--     <dubbo:monitor protocol="registry" /> -->
+    
+	<dubbo:protocol  id="thrift_1" name="thrift2"  port="28088" dispather="message" />
+		
+	<bean id="helloService" class="com.sodao.dubbo.t6.HelloServiceImpl" />
+	<dubbo:service interface="com.sodao.dubbo.t6.HelloService$Iface"
+		ref="helloService" protocol="thrift_1" >
+	</dubbo:service>
+
+	<dubbo:protocol  id="thrift_2" name="thrift2" port="28090" dispather="message"/>
+		
+	<bean id="helloService2" class="com.sodao.dubbo.t6.HelloServiceImpl2" /> 
+	<dubbo:service interface="com.sodao.dubbo.t6.HelloService2$Iface"
+		ref="helloService2" protocol="thrift_2" >
+	</dubbo:service>
+	
+</beans>
