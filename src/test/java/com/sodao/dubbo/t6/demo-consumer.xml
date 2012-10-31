@@ -7,15 +7,18 @@
 
 	<dubbo:application name="sodao-consumer-01" owner="consumer-01"/>
 	
-	<dubbo:registry address="zookeeper://localhost:2181?proxy=thrift2" />
+	<dubbo:registry address="zookeeper://localhost:2181?proxy=thrift2" client="curator"/>
 	
-	<dubbo:reference interface="com.sodao.dubbo.t6.HelloService$Iface"
+	<!-- <dubbo:registry address="multicast://224.5.6.7:1234?proxy=thrift2"/> -->
+	
+	<dubbo:reference interface="com.sodao.dubbo.t6.HelloService$Iface" async="true"
 		id="helloService">
 	</dubbo:reference>
 
-	<dubbo:reference interface="com.sodao.dubbo.t6.HelloService2$Iface"
+	<!-- <dubbo:reference interface="com.sodao.dubbo.t6.HelloService2$Iface"
 		id="helloService2" >
-	</dubbo:reference>
+	</dubbo:reference> -->
 	
-	<!-- <dubbo:monitor protocol="registry" /> -->
+	<dubbo:monitor protocol="registry" />
+	
 </beans>

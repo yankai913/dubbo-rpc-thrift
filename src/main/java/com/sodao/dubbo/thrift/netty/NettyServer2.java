@@ -42,8 +42,7 @@ import com.alibaba.dubbo.remoting.ChannelHandler;
 import com.alibaba.dubbo.remoting.RemotingException;
 import com.alibaba.dubbo.remoting.Server;
 import com.alibaba.dubbo.remoting.transport.AbstractServer;
-import com.alibaba.dubbo.remoting.transport.dispather.ChannelHandlers;
-import com.sodao.dubbo.thrift.codec.ThriftExchangeCodec;
+import com.alibaba.dubbo.remoting.transport.dispatcher.ChannelHandlers;
 
 /**
  * NettyServer
@@ -61,11 +60,11 @@ public class NettyServer2 extends AbstractServer implements Server {
 
     private org.jboss.netty.channel.Channel channel;
 
-    private int maxLength;
+//    private int maxLength;
     
-    public NettyServer2(URL url, ChannelHandler handler) throws RemotingException{
+    public NettyServer2(URL url, ChannelHandler handler) throws RemotingException {
     	super(url, ChannelHandlers.wrap(handler, url.addParameterIfAbsent(Constants.THREAD_NAME_KEY, SERVER_THREAD_POOL_NAME + "-" + url.getPath())));
-    	this.maxLength = url.getParameter(Constants.PAYLOAD_KEY, Constants.DEFAULT_PAYLOAD);
+//    	this.maxLength = url.getParameter(Constants.PAYLOAD_KEY, Constants.DEFAULT_PAYLOAD);
     }
 
     @Override
@@ -82,10 +81,6 @@ public class NettyServer2 extends AbstractServer implements Server {
         // final Timer timer = new HashedWheelTimer(new NamedThreadFactory("NettyIdleTimer", true));
         bootstrap.setPipelineFactory(new ChannelPipelineFactory() {
             public ChannelPipeline getPipeline() {
-            	//自己实例化codec，目的是绑定url，这样一个port只能暴露一个service，解决根据方法名称找不到所属的接口名称问题。
-            	ThriftExchangeCodec codec = new ThriftExchangeCodec(getUrl());
-            	
-                NettyCodecAdapter2 adapter = new NettyCodecAdapter2(codec, codec, getUrl(), NettyServer2.this);
                 ChannelPipeline pipeline = Channels.pipeline();
                 /*int idleTimeout = getIdleTimeout();
                 if (idleTimeout > 10000) {
@@ -93,10 +88,7 @@ public class NettyServer2 extends AbstractServer implements Server {
                 }*/
                 
                 pipeline.addLast("encoder2", new LengthFieldPrepender(4));
-                pipeline.addLast("encoder", adapter.getEncoder());
-                pipeline.addLast("decoder2", new LengthFieldBasedFrameDecoder(maxLength, 0, 4, 0, 4));
-                pipeline.addLast("decoder", adapter.getDecoder());
-                
+                pipeline.addLast("decoder2", new LengthFieldBasedFrameDecoder(Constants.DEFAULT_PAYLOAD, 0, 4, 0, 4));
                 pipeline.addLast("handler", nettyHandler);
                 return pipeline;
             }

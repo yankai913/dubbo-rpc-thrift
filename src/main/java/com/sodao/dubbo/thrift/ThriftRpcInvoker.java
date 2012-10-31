@@ -50,7 +50,6 @@ public class ThriftRpcInvoker<T> extends AbstractInvoker<T> {
     public ThriftRpcInvoker(Class<T> serviceType, URL url, ExchangeClient[] clients, Set<Invoker<?>> invokers){
         super(serviceType, url, new String[] {Constants.INTERFACE_KEY, Constants.GROUP_KEY, Constants.TOKEN_KEY, Constants.TIMEOUT_KEY});
         this.clients = clients;
-        // get version.
         this.version = url.getParameter(Constants.VERSION_KEY, "2.0.0");
         this.invokers = invokers; 
     }
@@ -61,19 +60,8 @@ public class ThriftRpcInvoker<T> extends AbstractInvoker<T> {
     
     @Override
     protected Result doInvoke(final Invocation invocation) throws Throwable {
-        RpcInvocation inv = null;
-        final String methodName  ;
-        if(Constants.$INVOKE.equals(invocation.getMethodName()) 
-        		&&invocation.getArguments() != null 
-                && invocation.getArguments().length >0 
-                && invocation.getArguments()[0] != null){
-            inv = (RpcInvocation) invocation;
-            //the frist argument must be real method name;
-            methodName = invocation.getArguments()[0].toString();
-        }else {
-            inv = new RpcInvocation(invocation);
-            methodName = invocation.getMethodName();
-        }
+        RpcInvocation inv = new RpcInvocation(invocation);
+        final String methodName = invocation.getMethodName();;
         inv.setAttachment(Constants.PATH_KEY, getUrl().getPath());
         inv.setAttachment(Constants.VERSION_KEY, version);
         

@@ -12,7 +12,7 @@
 
 	<dubbo:application name="sodao-provider-01" owner="provider-01"/>
 	
-	<dubbo:registry address="zookeeper://127.0.0.1:2181?proxy=thrift"/>
+	<dubbo:registry address="multicast://224.5.6.7:1234?proxy=thrift2"/>
 	
 	    <!-- 用registry协议配置监视器 -->
     <!-- <dubbo:monitor protocol="registry" /> -->

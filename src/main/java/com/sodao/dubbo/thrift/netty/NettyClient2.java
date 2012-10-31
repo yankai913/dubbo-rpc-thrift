@@ -39,7 +39,6 @@ import com.alibaba.dubbo.common.utils.NetUtils;
 import com.alibaba.dubbo.remoting.ChannelHandler;
 import com.alibaba.dubbo.remoting.RemotingException;
 import com.alibaba.dubbo.remoting.transport.AbstractClient;
-import com.sodao.dubbo.thrift.codec.ThriftExchangeCodec;
 
 /**
  * NettyClient.
@@ -75,13 +74,10 @@ public class NettyClient2 extends AbstractClient {
         final NettyHandler2 nettyHandler = new NettyHandler2(getUrl(), this);
         bootstrap.setPipelineFactory(new ChannelPipelineFactory() {
             public ChannelPipeline getPipeline() {
-            	ThriftExchangeCodec codec = new ThriftExchangeCodec();
-                NettyCodecAdapter2 adapter = new NettyCodecAdapter2(codec, getUrl(), NettyClient2.this);
                 ChannelPipeline pipeline = Channels.pipeline();
+                
                 pipeline.addLast("encoder2", new LengthFieldPrepender(4));
-                pipeline.addLast("encoder", adapter.getEncoder());
                 pipeline.addLast("decoder2", new LengthFieldBasedFrameDecoder(Constants.DEFAULT_PAYLOAD, 0, 4, 0, 4));
-                pipeline.addLast("decoder", adapter.getDecoder());
                 pipeline.addLast("handler", nettyHandler);
                 return pipeline;
             }

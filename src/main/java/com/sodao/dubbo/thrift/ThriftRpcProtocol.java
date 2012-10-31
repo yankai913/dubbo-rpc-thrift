@@ -1,21 +1,5 @@
-/*
- * Copyright 1999-2011 Alibaba Group.
- *  
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *      http://www.apache.org/licenses/LICENSE-2.0
- *  
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package com.sodao.dubbo.thrift;
 
-import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -25,10 +9,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.locks.ReentrantLock;
 
+import org.jboss.netty.buffer.ChannelBuffer;
+
 import com.alibaba.dubbo.common.Constants;
 import com.alibaba.dubbo.common.URL;
 import com.alibaba.dubbo.common.extension.ExtensionLoader;
-import com.alibaba.dubbo.common.utils.NetUtils;
 import com.alibaba.dubbo.common.utils.StringUtils;
 import com.alibaba.dubbo.remoting.Channel;
 import com.alibaba.dubbo.remoting.RemotingException;
@@ -47,9 +32,16 @@ import com.alibaba.dubbo.rpc.RpcContext;
 import com.alibaba.dubbo.rpc.RpcException;
 import com.alibaba.dubbo.rpc.RpcInvocation;
 import com.alibaba.dubbo.rpc.protocol.AbstractProtocol;
-import com.sodao.dubbo.thrift.codec.ThriftExchangeCodec;
+//import com.alibaba.dubbo.rpc.protocol.dubbo.DubboExporter;
+//import com.sodao.dubbo.thrift.codec.ThriftExchangeCodec;
+import com.sodao.dubbo.thrift.common.TBaseTools;
+import com.sodao.dubbo.thrift.exchange.HeaderExchanger2;
 import com.sodao.dubbo.thrift.netty.NettyTransporter2;
-
+/**
+ * 
+ * @author yankai
+ * @date 2012-8-31
+ */
 public class ThriftRpcProtocol extends AbstractProtocol implements Protocol {
 
     public static final String NAME = "thrift2";
@@ -58,98 +50,64 @@ public class ThriftRpcProtocol extends AbstractProtocol implements Protocol {
     
     public final ReentrantLock lock = new ReentrantLock();
     
-    private final Map<String, ExchangeServer> serverMap = new ConcurrentHashMap<String, ExchangeServer>();
+    private final Map<String, ExchangeServer> serverMap = 
+    		new ConcurrentHashMap<String, ExchangeServer>();
  
-    private final Map<String, ReferenceCountExchangeClient> referenceClientMap = new ConcurrentHashMap<String, ReferenceCountExchangeClient>(); 
+    private final Map<String, ReferenceCountExchangeClient> referenceClientMap = 
+    		new ConcurrentHashMap<String, ReferenceCountExchangeClient>(); 
     
-    private final ConcurrentMap<String, LazyConnectExchangeClient> ghostClientMap = new ConcurrentHashMap<String, LazyConnectExchangeClient>();
-    
-    //consumer side export a stub service for dispatching event
-    //servicekey-stubmethods
-    private final ConcurrentMap<String, String> stubServiceMethodsMap = new ConcurrentHashMap<String, String>();
-    
-    private static final String IS_CALLBACK_SERVICE_INVOKE = "_isCallBackServiceInvoke";
+    private final ConcurrentMap<String, LazyConnectExchangeClient> ghostClientMap = 
+    		new ConcurrentHashMap<String, LazyConnectExchangeClient>();
     
     private ExchangeHandler requestHandler = new ExchangeHandlerAdapter() {
-        
-        public Object reply(ExchangeChannel channel, Object message) throws RemotingException {
-            if (message instanceof Invocation) {
-                Invocation inv = (Invocation) message;
-                Invoker<?> invoker = getInvoker(channel, inv);
-                //如果是callback 需要处理高版本调用低版本的问题
-                if (Boolean.TRUE.toString().equals(inv.getAttachments().get(IS_CALLBACK_SERVICE_INVOKE))){
-                    String methodsStr = invoker.getUrl().getParameters().get("methods");
-                    boolean hasMethod = false;
-                    if (methodsStr == null || methodsStr.indexOf(",") == -1){
-                        hasMethod = inv.getMethodName().equals(methodsStr);
-                    } else {
-                        String[] methods = methodsStr.split(",");
-                        for (String method : methods){
-                            if (inv.getMethodName().equals(method)){
-                                hasMethod = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (!hasMethod){
-                        logger.warn(new IllegalStateException("The methodName "+inv.getMethodName()+" not found in callback service interface ,invoke will be ignored. please update the api interface. url is:" + invoker.getUrl()) +" ,invocation is :"+inv );
-                        return null;
-                    }
+
+        @Override
+        public Object reply( ExchangeChannel channel, Object msg ) throws RemotingException {
+
+            if (msg instanceof ChannelBuffer) {
+            	ChannelBuffer buf = (ChannelBuffer) msg;
+                String serviceName = channel.getUrl().getParameter(Constants.INTERFACE_KEY);
+                String serviceKey = serviceKey(channel.getLocalAddress().getPort(), serviceName, null, null );
+                ThriftRpcExporter<?> exporter = (ThriftRpcExporter<?>) exporterMap.get(serviceKey);
+                if (exporter == null) {
+                    throw new RemotingException(channel,
+                                                "Not found exported service: "
+                                                        + serviceKey
+                                                        + " in "
+                                                        + exporterMap.keySet()
+                                                        + ", may be version or group mismatch "
+                                                        + ", channel: consumer: "
+                                                        + channel.getRemoteAddress()
+                                                        + " --> provider: "
+                                                        + channel.getLocalAddress()
+                                                        + ", message:"+ msg);
                 }
+
                 RpcContext.getContext().setRemoteAddress(channel.getRemoteAddress());
-                return invoker.invoke(inv);
+                String method = TBaseTools.getStringAtAbsoluteIndex(buf, 4);
+                Invocation inv = new RpcInvocation(method, null, new Object[]{buf});
+                return exporter.getInvoker().invoke(inv);
+
             }
-            throw new RemotingException(channel, "Unsupported request: " + message == null ? null : (message.getClass().getName() + ": " + message) + ", channel: consumer: " + channel.getRemoteAddress() + " --> provider: " + channel.getLocalAddress());
+
+            throw new RemotingException(channel,
+                                        "Unsupported request: "
+                                                + (msg.getClass().getName() + ": " + msg)
+                                                + ", channel: consumer: "
+                                                + channel.getRemoteAddress()
+                                                + " --> provider: "
+                                                + channel.getLocalAddress());
         }
 
         @Override
-        public void received(Channel channel, Object message) throws RemotingException {
-            if (message instanceof Invocation) {
-                reply((ExchangeChannel) channel, message);
+        public void received( Channel channel, Object message ) throws RemotingException {
+            if ( message instanceof Invocation ) {
+                reply( ( ExchangeChannel ) channel, message );
             } else {
-                super.received(channel, message);
+                super.received( channel, message );
             }
         }
 
-        @Override
-        public void connected(Channel channel) throws RemotingException {
-            invoke(channel, Constants.ON_CONNECT_KEY);
-        }
-
-        @Override
-        public void disconnected(Channel channel) throws RemotingException {
-            if(logger.isInfoEnabled()){
-                logger.info("disconected from "+ channel.getRemoteAddress() + ",url:" + channel.getUrl());
-            }
-            invoke(channel, Constants.ON_DISCONNECT_KEY);
-        }
-        
-        private void invoke(Channel channel, String methodKey) {
-            Invocation invocation = createInvocation(channel, channel.getUrl(), methodKey);
-            if (invocation != null) {
-                try {
-                    received(channel, invocation);
-                } catch (Throwable t) {
-                    logger.warn("Failed to invoke event method " + invocation.getMethodName() + "(), cause: " + t.getMessage(), t);
-                }
-            }
-        }
-        
-        private Invocation createInvocation(Channel channel, URL url, String methodKey) {
-            String method = url.getParameter(methodKey);
-            if (method == null || method.length() == 0) {
-                return null;
-            }
-            RpcInvocation invocation = new RpcInvocation(method, new Class<?>[0], new Object[0]);
-            invocation.setAttachment(Constants.PATH_KEY, url.getPath());
-            invocation.setAttachment(Constants.GROUP_KEY, url.getParameter(Constants.GROUP_KEY));
-            invocation.setAttachment(Constants.INTERFACE_KEY, url.getParameter(Constants.INTERFACE_KEY));
-            invocation.setAttachment(Constants.VERSION_KEY, url.getParameter(Constants.VERSION_KEY));
-            if (url.getParameter(Constants.STUB_EVENT_KEY, false)){
-                invocation.setAttachment(Constants.STUB_EVENT_KEY, Boolean.TRUE.toString());
-            }
-            return invocation;
-        }
     };
     
     private static ThriftRpcProtocol INSTANCE;
@@ -176,41 +134,7 @@ public class ThriftRpcProtocol extends AbstractProtocol implements Protocol {
     Map<String, Exporter<?>> getExporterMap(){
         return exporterMap;
     }
-    
-    private boolean isClientSide(Channel channel) {
-        InetSocketAddress address = channel.getRemoteAddress();
-        URL url = channel.getUrl();
-        return url.getPort() == address.getPort() && 
-                    NetUtils.filterLocalHost(channel.getUrl().getIp())
-                    .equals(NetUtils.filterLocalHost(address.getAddress().getHostAddress()));
-    }
-    
-    public Invoker<?> getInvoker(Channel channel, Invocation inv) throws RemotingException{
-        boolean isCallBackServiceInvoke = false;
-        boolean isStubServiceInvoke = false;
-        int port = channel.getLocalAddress().getPort();
-        String path = inv.getAttachments().get(Constants.PATH_KEY);
-        //如果是客户端的回调服务.
-        isStubServiceInvoke = Boolean.TRUE.toString().equals(inv.getAttachments().get(Constants.STUB_EVENT_KEY));
-        if (isStubServiceInvoke){
-            port = channel.getRemoteAddress().getPort();
-        }
-        //callback
-        isCallBackServiceInvoke = isClientSide(channel) && !isStubServiceInvoke;
-        if(isCallBackServiceInvoke){
-            path = inv.getAttachments().get(Constants.PATH_KEY)+"."+inv.getAttachments().get(Constants.CALLBACK_SERVICE_KEY);
-            inv.getAttachments().put(IS_CALLBACK_SERVICE_INVOKE, Boolean.TRUE.toString());
-        }
-        String serviceKey = serviceKey(port, path, inv.getAttachments().get(Constants.VERSION_KEY), inv.getAttachments().get(Constants.GROUP_KEY));
-
-        ThriftRpcExporter<?> exporter = (ThriftRpcExporter<?>) exporterMap.get(serviceKey);
-        
-        if (exporter == null)
-            throw new RemotingException(channel, "Not found exported service: " + serviceKey + " in " + exporterMap.keySet() + ", may be version or group mismatch " + ", channel: consumer: " + channel.getRemoteAddress() + " --> provider: " + channel.getLocalAddress() + ", message:" + inv);
-
-        return exporter.getInvoker();
-    }
-    
+   
     public Collection<Invoker<?>> getInvokers() {
         return Collections.unmodifiableCollection(invokers);
     }
@@ -220,26 +144,11 @@ public class ThriftRpcProtocol extends AbstractProtocol implements Protocol {
     }
 
     public <T> Exporter<T> export(Invoker<T> invoker) throws RpcException {
-        URL url = invoker.getUrl().addParameterIfAbsent(Constants.CODEC_KEY, ThriftExchangeCodec.NAME);
-        
+    	URL url = invoker.getUrl();
         // export service.
         String key = serviceKey(url);
         ThriftRpcExporter<T> exporter = new ThriftRpcExporter<T>(invoker, key, exporterMap);
         exporterMap.put(key, exporter);
-        
-        //export an stub service for dispaching event
-        Boolean isStubSupportEvent = url.getParameter(Constants.STUB_EVENT_KEY,Constants.DEFAULT_STUB_EVENT);
-        Boolean isCallbackservice = url.getParameter(Constants.IS_CALLBACK_SERVICE, false);
-        if (isStubSupportEvent && !isCallbackservice){
-            String stubServiceMethods = url.getParameter(Constants.STUB_EVENT_METHODS_KEY);
-            if (stubServiceMethods == null || stubServiceMethods.length() == 0 ){
-                if (logger.isWarnEnabled()){
-                    logger.warn( new IllegalStateException("consumer ["+url.getParameter(Constants.INTERFACE_KEY)+"], has set stubproxy support event ,but no stub methods founded."));
-                }
-            } else {
-                stubServiceMethodsMap.put(url.getServiceKey(), stubServiceMethods);
-            }
-        }
 
         openServer(url);
         
@@ -265,12 +174,8 @@ public class ThriftRpcProtocol extends AbstractProtocol implements Protocol {
     }
     
     private ExchangeServer getServer(URL url) {
-    	//目前已经是自己new出来的对象，没有getExtention
-    	url = url.addParameterIfAbsent(Constants.CODEC_KEY,  ThriftExchangeCodec.NAME);
-        //默认开启server关闭时发送readonly事件
-        url = url.addParameterIfAbsent(Constants.CHANNEL_READONLYEVENT_SENT_KEY, Boolean.TRUE.toString());
-        //默认开启heartbeat
-//        url = url.addParameterIfAbsent(Constants.HEARTBEAT_KEY, String.valueOf(Constants.DEFAULT_HEARTBEAT));
+    	//指定自己的exchanger
+    	url = url.addParameterIfAbsent(Constants.EXCHANGER_KEY,  HeaderExchanger2.NAME);
         //server type setting
         url = url.addParameterIfAbsent(Constants.SERVER_KEY, NettyTransporter2.NAME);
         //check server type
@@ -351,12 +256,8 @@ public class ThriftRpcProtocol extends AbstractProtocol implements Protocol {
      * 创建新连接.
      */
     private ExchangeClient initClient(URL url) {
-       // String version = url.getParameter(Constants.DUBBO_VERSION_KEY);
-        //boolean compatible = (version != null && version.startsWith("1.0."));
-    	//目前是自己new出来的，没有用getExtention
-        url = url.addParameterIfAbsent(Constants.CODEC_KEY,  ThriftExchangeCodec.NAME);
-        //默认开启heartbeat
-//        url = url.addParameterIfAbsent(Constants.HEARTBEAT_KEY, String.valueOf(Constants.DEFAULT_HEARTBEAT));
+    	//指定自己的exchanger
+    	url = url.addParameterIfAbsent(Constants.EXCHANGER_KEY,  HeaderExchanger2.NAME);
         //client type setting.
         url = url.addParameterIfAbsent(Constants.CLIENT_KEY, url.getParameter(Constants.SERVER_KEY, NettyTransporter2.NAME));
         // check client type
@@ -426,6 +327,5 @@ public class ThriftRpcProtocol extends AbstractProtocol implements Protocol {
                 }
             }
         }
-        stubServiceMethodsMap.clear();
     }
 }

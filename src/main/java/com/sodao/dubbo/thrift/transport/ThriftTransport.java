@@ -3,7 +3,11 @@ package com.sodao.dubbo.thrift.transport;
 import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
 import org.jboss.netty.buffer.ChannelBuffer;
-
+/**
+ * 
+ * @author yankai
+ * @date 2012-8-31
+ */
 public class ThriftTransport extends TTransport {
 	private ChannelBuffer inputBuffer;
 	private ChannelBuffer outputBuffer;

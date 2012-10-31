@@ -16,7 +16,13 @@ public class HelloServiceImpl implements HelloService.Iface {
 		String sub = str.substring(0, 5);
 		int i = Integer.parseInt(str.substring(5));
 		i = i + 1;
+//		try {
+//			Thread.sleep(10000);
+//		} catch (Exception e) {
+//			
+//		}
 		return sub + i;
+//		throw new NullPointerException("test nullpointer");
 	}
 
 	@Override
